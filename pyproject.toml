@@ -1,0 +1,19 @@
+[project]
+name = "miipher"
+version = "0.1.0"
+description = "Add a short description here"
+authors = [
+    { name = "Wataru Nakata", email = "wataru9871@gmail.com" }
+]
+dependencies = ["lightning~=2.0.5", "torchaudio~=2.0.2"]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+[tool.hatch.metadata]
+allow-direct-references = true
