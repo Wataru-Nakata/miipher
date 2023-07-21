@@ -5,7 +5,7 @@ description = "Add a short description here"
 authors = [
     { name = "Wataru Nakata", email = "wataru9871@gmail.com" }
 ]
-dependencies = ["lightning~=2.0.5", "torchaudio~=2.0.2"]
+dependencies = ["lightning~=2.0.5", "torchaudio~=2.0.2", "speechbrain~=0.5.14", "matplotlib~=3.7.2", "pyroomacoustics~=0.7.3"]
 readme = "README.md"
 requires-python = ">= 3.10"
 
@@ -15,5 +15,6 @@ build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
+dev-dependencies = ["ipykernel~=6.24.0"]
 [tool.hatch.metadata]
 allow-direct-references = true
