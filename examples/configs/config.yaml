@@ -1,0 +1,84 @@
+preprocess:
+  preprocess_dataset:
+    _target_: torch.utils.data.ConcatDataset
+    datasets:
+      - 
+        _target_: miipher.dataset.jvs_corpus.JVSCorpus
+        root: /mnt/hdd/datasets/jvs_ver1/
+      - 
+        _target_: miipher.dataset.libritts.LibriTTSCorpus
+        root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/
+  ssl_models:
+    - _target_: transformers.AutoModel.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
+    - _target_: transformers.AutoFeatureExtractor.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
+    - sr: 16_000
+  phoneme_model:
+    _target_: transformers.AutoModel.from_pretrained
+    pretrained_model_name_or_path: "vinai/xphonebert-base"
+  phoneme_tokenizer:
+    _target_: transformers.AutoTokenizer.from_pretrained
+    pretrained_model_name_or_path: "vinai/xphonebert-base"
+  xvector_model:
+    _target_: speechbrain.pretrained.EncoderClassifier.from_hparams
+    source: speechbrain/spkrec-ecapa-voxceleb
+  text2phone_model:
+    _target_: text2phonemesequence.Text2PhonemeSequence
+    is_cuda: True
+  degration:
+    format_encoding_pairs:
+      - format: mp3
+        compression: 16
+      - format: mp3
+        compression: 32
+      - format: mp3
+        compression: 64
+      - format: mp3
+        compression: 128
+      - format: vorbis
+        compression: -1
+      - format: vorbis
+        compression: 0
+      - format: vorbis
+        compression: 1
+      - format: amr-nb
+        compression: 5
+      - format: wav
+        encoding: ALAW
+        bits_per_sample: 8
+    reverb_conditions:
+      reverbation_times:
+        max: 0.5
+        min: 0.2
+      room_xy:
+        max: 10.0
+        min: 2.0
+      room_z:
+        max: 5.0
+        min: 2.0
+      room_params:
+        fs: 22050
+        max_order: 10
+        absorption: 0.2
+      source_pos:
+        - 1.0
+        - 1.0
+        - 1.0
+      mic_pos:
+        - 1.0
+        - 0.7
+        - 1.2
+    n_rirs: 1000
+    background_noise:
+      snr:
+        max: 30.0
+        min: 5.0
+  train_tar_sink:
+    _target_: webdataset.ShardWriter
+    pattern: "preprocessed_data/wavlm_large-train-%06d.tar.gz"
+  val_tar_sink:
+    _target_: webdataset.ShardWriter
+    pattern: "preprocessed_data/wavlm_large-val-%06d.tar.gz"
+  val_size: 3000
+sample_rate: 22050

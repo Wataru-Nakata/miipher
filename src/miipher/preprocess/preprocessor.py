@@ -9,6 +9,9 @@ import tqdm
 from torch.utils.data import DataLoader
 from speechbrain.pretrained import EncoderClassifier
 from .noiseAugmentation import DegrationApplier
+import io
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 
 class Preprocessor:
@@ -23,14 +26,24 @@ class Preprocessor:
         """
         self.cfg = cfg
         self.dataset = hydra.utils.instantiate(cfg.preprocess.preprocess_dataset)
-        self.spec_module = torchaudio.transforms.Spectrogram(**cfg.preprocess.stft)
-        self.mel_scale = torchaudio.transforms.MelScale(**cfg.preprocess.mel)
         self.sampling_rate = self.cfg.sample_rate
         self.ssl_models = hydra.utils.instantiate(cfg.preprocess.ssl_models)
         self.phoneme_model = hydra.utils.instantiate(cfg.preprocess.phoneme_model)
+        self.phoneme_tokenizer = hydra.utils.instantiate(cfg.preprocess.phoneme_tokenizer)
         self.xvector_model = hydra.utils.instantiate(cfg.preprocess.xvector_model) 
-        self.degration_model = DegrationApplier(cfg.)
+        self.degration_model = DegrationApplier(cfg.preprocess.degration)
+        self.text2phone_dict = dict()
+        self.lock = threading.Lock()
+        self.executor = ThreadPoolExecutor(max_workers=20)
+        self.executor_semaphore = threading.Semaphore(40)
 
+    def task_completed_callback(self, future):
+        self.executor_semaphore.release()
+    def submit_proxy(self,func,*args,**kwargs):
+        self.executor_semaphore.acquire()
+        future = self.executor.submit(func,*args,**kwargs)
+        future.add_done_callback(self.task_completed_callback)
+        return future
     @torch.no_grad()
     def process_utterance(
         self,
@@ -38,7 +51,9 @@ class Preprocessor:
         orig_waveform: torch.Tensor,
         sample_rate: int,
         audio_file_path,
-        word_segmented_text: str
+        word_segmented_text: str,
+        lang_code: str,
+        sink: webdataset.ShardWriter,
     ):
 
         waveform = torchaudio.functional.resample(
@@ -47,33 +62,44 @@ class Preprocessor:
             0
         ]  # remove channel dimension only support mono
 
-        mel_spec, _ = self.calc_spectrogram(waveform)
         with open(audio_file_path, mode="rb") as f:
             wav_bytes = f.read()
 
         # ssl model feature extraction
-        ssl_feature = self.extract_ssl_feature(orig_waveform,sample_rate)
+        clean_ssl_feature = self.extract_ssl_feature(orig_waveform,sample_rate)
 
-        phone_feature = self.extract_phone_feature(word_segmented_text)
+        phone_feature = self.extract_phone_feature(word_segmented_text,lang_code)
 
-        speaker_representation = self.extract_speaker_representation(orig_waveform,sample_rate)
+        clean_speaker_representation = self.extract_speaker_representation(orig_waveform,sample_rate)
 
+        degraded_speech = self.apply_noise(waveform)
+        degraded_ssl_feature = self.extract_ssl_feature(degraded_speech,self.sampling_rate)
+        degraded_speaker_representation = self.extract_speaker_representation(degraded_speech,self.cfg.sample_rate)
+        buff = io.BytesIO()
+        torchaudio.save(buff,src=degraded_speech.unsqueeze(0),sample_rate=self.sampling_rate,format='wav')
+        buff.seek(0)
+
+        
         sample = {
             "__key__": basename,
             "speech.wav": wav_bytes,
+            "degraded_speech.wav": buff.read(),
             "resampled_speech.pth": webdataset.torch_dumps(waveform),
-            "mel.pth": webdataset.torch_dumps(mel_spec.T),
-            "ssl_feature.pth": webdataset.torch_dumps( ssl_feature.last_hidden_state[0].cpu()),
-            "phone_feature.pth": phone_feature,
+            "clean_ssl_feature.pth": webdataset.torch_dumps( clean_ssl_feature.last_hidden_state[0].cpu()),
+            "degraded_ssl_feature.pth": webdataset.torch_dumps( degraded_ssl_feature.last_hidden_state[0].cpu()),
+            "phone_feature.pth": webdataset.torch_dumps(phone_feature),
             "word_segmented_text.txt": word_segmented_text,
-            "speaker_representation.pth": speaker_representation
+            "clean_speaker_representation.pth": clean_speaker_representation,
+            "degraded_speaker_representation.pth":degraded_speaker_representation 
         }
+        with self.lock:
+            sink.write(sample)
 
         return sample
     def apply_noise(self,waveform):
-        for noise_func in self.noise_funcs:
-            waveform = noise_func(waveform)
+        waveform = self.degration_model.process(waveform,self.sampling_rate)
         return waveform
+
 
     def extract_ssl_feature(self,waveform:torch.Tensor,sample_rate):
         ssl_model, processor, feature_cfg = self.ssl_models
@@ -88,12 +114,18 @@ class Preprocessor:
         ssl_feature = ssl_model(**inputs)
         return ssl_feature
     
-    def extract_phone_feature(self,text):
-        raise NotImplementedError
+    @torch.no_grad()
+    def extract_phone_feature(self,word_segmented_text,lang_code):
+        if lang_code not in self.text2phone_dict.keys():
+            self.text2phone_dict[lang_code] = hydra.utils.instantiate(self.cfg.preprocess.text2phone_model,language=lang_code)
+        input_phonemes = self.text2phone_dict[lang_code].infer_sentence(word_segmented_text)
+        input_ids = self.phoneme_tokenizer(input_phonemes,return_tensors='pt')
+        features = self.phoneme_model(**input_ids)
+        return features
     def extract_speaker_representation(self,waveform,sample_rate):
-        xvector_model, xvector_cfg = self.xvector_model
+        xvector_model = self.xvector_model
         wav_tensor = torchaudio.functional.resample(
-            waveform=waveform, orig_freq=sample_rate, new_freq=xvector_cfg.sr
+            waveform=waveform, orig_freq=sample_rate, new_freq=16_000
         )
         xvector = xvector_model.encode_batch(wav_tensor)
         return xvector
@@ -103,26 +135,28 @@ class Preprocessor:
         pathlib.Path("/".join(self.cfg.preprocess.train_tar_sink.pattern.split("/")[:-1])).mkdir(exist_ok=True)
         train_sink = hydra.utils.instantiate(self.cfg.preprocess.train_tar_sink)
         val_sink = hydra.utils.instantiate(self.cfg.preprocess.val_tar_sink)
-        dataloader = DataLoader(self.dataset,batch_size=1)
-        for idx, (basename, (wav,sr),wav_path,word_segmented_text) in enumerate(tqdm.tqdm(dataloader)):
-            sample = self.process_utterance(
-                basename[0],
-                wav[0],
-                sr[0],
-                wav_path[0],
-                word_segmented_text[0]
-            )
+        dataloader = DataLoader(self.dataset,batch_size=1,shuffle=True)
+        for idx, data in enumerate(tqdm.tqdm(dataloader)):
+            basename = data['basename'][0]
+            wav_path = data['wav_path'][0]
+            wav_tensor = data['wav_tensor'][0].float()
+            sr = data['sr'][0]
+            word_segmented_text = data['word_segmented_text'][0]
+            lang_code = data['lang_code'][0]
             if idx >= self.cfg.preprocess.val_size:
-                train_sink.write(sample)
+                sink = train_sink
             else:
-                val_sink.write(sample)
+                sink = val_sink
+
+            self.submit_proxy(self.process_utterance,
+                basename,
+                wav_tensor,
+                sr,
+                wav_path,
+                word_segmented_text,
+                lang_code,
+                sink,
+            )
 
         train_sink.close()
         val_sink.close()
-
-    def calc_spectrogram(self, waveform: torch.Tensor):
-        magspec = self.spec_module(waveform)
-        melspec = self.mel_scale(magspec)
-        logmelspec = torch.log(torch.clamp_min(melspec, 1.0e-5) * 1.0).to(torch.float32)
-        energy = torch.norm(magspec, dim=0)
-        return logmelspec, energy.numpy()
