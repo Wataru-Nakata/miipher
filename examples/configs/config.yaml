@@ -42,8 +42,6 @@ preprocess:
         compression: 0
       - format: vorbis
         compression: 1
-      - format: amr-nb
-        compression: 5
       - format: wav
         encoding: ALAW
         bits_per_sample: 8
@@ -74,6 +72,10 @@ preprocess:
       snr:
         max: 30.0
         min: 5.0
+      patterns:
+        -
+          - /mnt/hdd/datasets/slakh2100_flac_redux
+          - '**/*.flac'
   train_tar_sink:
     _target_: webdataset.ShardWriter
     pattern: "preprocessed_data/wavlm_large-train-%06d.tar.gz"
@@ -81,4 +83,5 @@ preprocess:
     _target_: webdataset.ShardWriter
     pattern: "preprocessed_data/wavlm_large-val-%06d.tar.gz"
   val_size: 3000
+  n_repeats: 4
 sample_rate: 22050

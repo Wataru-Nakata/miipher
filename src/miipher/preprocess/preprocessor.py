@@ -33,17 +33,7 @@ class Preprocessor:
         self.xvector_model = hydra.utils.instantiate(cfg.preprocess.xvector_model) 
         self.degration_model = DegrationApplier(cfg.preprocess.degration)
         self.text2phone_dict = dict()
-        self.lock = threading.Lock()
-        self.executor = ThreadPoolExecutor(max_workers=20)
-        self.executor_semaphore = threading.Semaphore(40)
-
-    def task_completed_callback(self, future):
-        self.executor_semaphore.release()
-    def submit_proxy(self,func,*args,**kwargs):
-        self.executor_semaphore.acquire()
-        future = self.executor.submit(func,*args,**kwargs)
-        future.add_done_callback(self.task_completed_callback)
-        return future
+        self.n_repeats = cfg.preprocess.n_repeats
     @torch.no_grad()
     def process_utterance(
         self,
@@ -71,31 +61,29 @@ class Preprocessor:
         phone_feature = self.extract_phone_feature(word_segmented_text,lang_code)
 
         clean_speaker_representation = self.extract_speaker_representation(orig_waveform,sample_rate)
+        for i in range(self.n_repeats):
+            degraded_speech = self.apply_noise(waveform)
+            degraded_ssl_feature = self.extract_ssl_feature(degraded_speech,self.sampling_rate)
+            degraded_speaker_representation = self.extract_speaker_representation(degraded_speech,self.cfg.sample_rate)
+            buff = io.BytesIO()
+            torchaudio.save(buff,src=degraded_speech.unsqueeze(0),sample_rate=self.sampling_rate,format='wav')
+            buff.seek(0)
 
-        degraded_speech = self.apply_noise(waveform)
-        degraded_ssl_feature = self.extract_ssl_feature(degraded_speech,self.sampling_rate)
-        degraded_speaker_representation = self.extract_speaker_representation(degraded_speech,self.cfg.sample_rate)
-        buff = io.BytesIO()
-        torchaudio.save(buff,src=degraded_speech.unsqueeze(0),sample_rate=self.sampling_rate,format='wav')
-        buff.seek(0)
-
-        
-        sample = {
-            "__key__": basename,
-            "speech.wav": wav_bytes,
-            "degraded_speech.wav": buff.read(),
-            "resampled_speech.pth": webdataset.torch_dumps(waveform),
-            "clean_ssl_feature.pth": webdataset.torch_dumps( clean_ssl_feature.last_hidden_state[0].cpu()),
-            "degraded_ssl_feature.pth": webdataset.torch_dumps( degraded_ssl_feature.last_hidden_state[0].cpu()),
-            "phone_feature.pth": webdataset.torch_dumps(phone_feature),
-            "word_segmented_text.txt": word_segmented_text,
-            "clean_speaker_representation.pth": clean_speaker_representation,
-            "degraded_speaker_representation.pth":degraded_speaker_representation 
-        }
-        with self.lock:
+            
+            sample = {
+                "__key__": basename + f"_{i}",
+                "speech.wav": wav_bytes,
+                "degraded_speech.wav": buff.read(),
+                "resampled_speech.pth": webdataset.torch_dumps(waveform),
+                "clean_ssl_feature.pth": webdataset.torch_dumps( clean_ssl_feature.last_hidden_state[0].cpu()),
+                "degraded_ssl_feature.pth": webdataset.torch_dumps( degraded_ssl_feature.last_hidden_state[0].cpu()),
+                "phone_feature.pth": webdataset.torch_dumps(phone_feature),
+                "word_segmented_text.txt": word_segmented_text,
+                "clean_speaker_representation.pth": clean_speaker_representation,
+                "degraded_speaker_representation.pth":degraded_speaker_representation 
+            }
             sink.write(sample)
 
-        return sample
     def apply_noise(self,waveform):
         waveform = self.degration_model.process(waveform,self.sampling_rate)
         return waveform
@@ -135,7 +123,7 @@ class Preprocessor:
         pathlib.Path("/".join(self.cfg.preprocess.train_tar_sink.pattern.split("/")[:-1])).mkdir(exist_ok=True)
         train_sink = hydra.utils.instantiate(self.cfg.preprocess.train_tar_sink)
         val_sink = hydra.utils.instantiate(self.cfg.preprocess.val_tar_sink)
-        dataloader = DataLoader(self.dataset,batch_size=1,shuffle=True)
+        dataloader = DataLoader(self.dataset,batch_size=1,shuffle=True,num_workers=8)
         for idx, data in enumerate(tqdm.tqdm(dataloader)):
             basename = data['basename'][0]
             wav_path = data['wav_path'][0]
@@ -148,7 +136,7 @@ class Preprocessor:
             else:
                 sink = val_sink
 
-            self.submit_proxy(self.process_utterance,
+            self.process_utterance(
                 basename,
                 wav_tensor,
                 sr,
@@ -157,6 +145,5 @@ class Preprocessor:
                 lang_code,
                 sink,
             )
-
         train_sink.close()
         val_sink.close()

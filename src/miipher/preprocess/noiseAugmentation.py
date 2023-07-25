@@ -5,6 +5,7 @@ import random
 import pyroomacoustics as pra
 import numpy as np
 import torch
+from pathlib import Path
 from tqdm import tqdm
 
 
@@ -16,6 +17,9 @@ class DegrationApplier():
         self.cfg = cfg
         self.rirs = []
         self.prepare_rir(cfg.n_rirs)
+        self.noise_audio_paths = []
+        for root, pattern in self.cfg.background_noise.patterns:
+            self.noise_audio_paths.extend(list(Path(root).glob(pattern)))
     def applyCodec(self,waveform,sample_rate):
         if len(self.format_encoding_pairs) == 0:
             return waveform
@@ -55,17 +59,18 @@ class DegrationApplier():
 
         noise_path = random.choice(self.noise_audio_paths)
         noise, noise_sr = torchaudio.load(noise_path)
+        noise = noise[0,:].unsqueeze(0)
         noise = torchaudio.functional.resample(noise,noise_sr,sample_rate)
         start_idx = random.randint(0,noise.size(1)- waveform.size(1))
         end_idx = start_idx + waveform.size(1)
         noise = noise[:,start_idx:end_idx]
-        augmented = torchaudio.functional.add_noise(waveform=waveform,noise=noise,snr=snr)
+        augmented = torchaudio.functional.add_noise(waveform=waveform,noise=noise,snr=torch.tensor([snr]))
         return augmented
 
     def process(self,waveform,sample_rate):
         if len(waveform.shape) == 1:
             waveform = waveform.unsqueeze(0)
-        # waveform = self.applyBackgroundNoise(waveform,sample_rate)
+        waveform = self.applyBackgroundNoise(waveform,sample_rate)
         waveform = self.applyReverb(waveform)
         waveform = self.applyCodec(waveform,sample_rate)
         return waveform.squeeze()
