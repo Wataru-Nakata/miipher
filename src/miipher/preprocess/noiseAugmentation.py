@@ -59,11 +59,16 @@ class DegrationApplier():
 
         noise_path = random.choice(self.noise_audio_paths)
         noise, noise_sr = torchaudio.load(noise_path)
-        noise = noise[0,:].unsqueeze(0)
+        noise /= noise.norm(p=2)
+        if noise.size(0)> 1:
+            noise = noise[0].unsqueeze(0)
         noise = torchaudio.functional.resample(noise,noise_sr,sample_rate)
-        start_idx = random.randint(0,noise.size(1)- waveform.size(1))
-        end_idx = start_idx + waveform.size(1)
-        noise = noise[:,start_idx:end_idx]
+        if not noise.size(1) < waveform.size(1):
+            start_idx = random.randint(0,noise.size(1)- waveform.size(1))
+            end_idx = start_idx + waveform.size(1)
+            noise = noise[:,start_idx:end_idx]
+        else:
+            noise = noise.repeat(1, waveform.size(1)//noise.size(1)+1)[:,:waveform.size(1)]
         augmented = torchaudio.functional.add_noise(waveform=waveform,noise=noise,snr=torch.tensor([snr]))
         return augmented
 
@@ -71,7 +76,8 @@ class DegrationApplier():
         if len(waveform.shape) == 1:
             waveform = waveform.unsqueeze(0)
         waveform = self.applyBackgroundNoise(waveform,sample_rate)
-        waveform = self.applyReverb(waveform)
+        if random.random() > self.cfg.reverb_conditions.p:
+            waveform = self.applyReverb(waveform)
         waveform = self.applyCodec(waveform,sample_rate)
         return waveform.squeeze()
     def __call__(self,waveform,sample_rate):

@@ -14,6 +14,7 @@ preprocess:
     - _target_: transformers.AutoFeatureExtractor.from_pretrained
       pretrained_model_name_or_path: "microsoft/wavlm-large"
     - sr: 16_000
+      layer: 8
   phoneme_model:
     _target_: transformers.AutoModel.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
@@ -46,6 +47,7 @@ preprocess:
         encoding: ALAW
         bits_per_sample: 8
     reverb_conditions:
+      p: 0.5
       reverbation_times:
         max: 0.5
         min: 0.2
@@ -75,7 +77,10 @@ preprocess:
       patterns:
         -
           - /mnt/hdd/datasets/slakh2100_flac_redux
-          - '**/*.flac'
+          - '**/mix.flac'
+        - 
+          - /mnt/hdd/datasets/TAU_urban/audio/
+          - '**/*.wav'
   train_tar_sink:
     _target_: webdataset.ShardWriter
     pattern: "preprocessed_data/wavlm_large-train-%06d.tar.gz"

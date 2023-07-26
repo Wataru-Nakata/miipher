@@ -25,7 +25,13 @@ class Miipher(nn.Module):
             postnet_n_convolutions=5
         )
         self.n_iters = n_iters
-    def forward(self, phone_feature,speaker_feature, ssl_feature):
+    def forward(self, phone_feature,speaker_feature, ssl_feature,ssl_feature_lengths):
+        '''
+        Args:   
+            phone_feature: (N, T, n_phone_feature)
+            speaker_feature: (N, n_speaker_embedding)
+            ssl_feature: (N, T, n_ssl_feature)
+        '''
         N = phone_feature.size(0)
         assert speaker_feature.size(0) == N
         assert ssl_feature.size(0) == N
@@ -35,11 +41,12 @@ class Miipher(nn.Module):
         intermediates = []
 
 
-        phone_speaker_feature = self.phone_speaker_film(phone_feature,speaker_feature)
-        for iteration_count in self.n_iters:
-            pos_enc = self.positional_encoding(iteration_count).repeat(N)
+        phone_speaker_feature = self.phone_speaker_film(phone_feature,speaker_feature.unsqueeze(1))
+        for iteration_count in range(self.n_iters):
+            pos_enc = self.positional_encoding(torch.tensor(iteration_count).unsqueeze(0).repeat(N))
+            assert pos_enc.size(0) == N
             phone_speaker_feature = self.positional_encoding_film(phone_speaker_feature,pos_enc)
-            ssl_feature = self.conformer_blocks[iteration_count](ssl_feature,phone_speaker_feature)
+            ssl_feature = self.conformer_blocks[iteration_count](ssl_feature,phone_speaker_feature,ssl_feature_lengths)
             intermediates.append(ssl_feature)
             ssl_feature = self.postnet(ssl_feature)
             intermediates.append(ssl_feature)
@@ -64,11 +71,21 @@ class FeatureCleanerBlock(nn.Module):
             num_heads,
             31
         )
-        self.layer_norm = nn.LayerNorm()
-    def forward(self,cleaning_feature,speaker_phone_feature):
+        self.layer_norm = nn.LayerNorm(1024)
+    def forward(self,cleaning_feature,speaker_phone_feature,cleaning_feature_lengths):
+        mask = _lengths_to_padding_mask(cleaning_feature_lengths).T
 
-        cleaning_feature += self.cross_attention(cleaning_feature,speaker_phone_feature,speaker_phone_feature)
+        cleaning_feature += self.cross_attention(cleaning_feature,speaker_phone_feature,speaker_phone_feature,)[0]
         cleaning_feature = self.layer_norm(cleaning_feature)
-        cleaning_feature += self.conformer_block(cleaning_feature)
+        cleaning_feature += self.conformer_block(cleaning_feature,key_padding_mask=mask)
         return cleaning_feature
 
+
+
+def _lengths_to_padding_mask(lengths: torch.Tensor) -> torch.Tensor:
+    batch_size = lengths.shape[0]
+    max_length = int(torch.max(lengths).item())
+    padding_mask = torch.arange(max_length, device=lengths.device, dtype=lengths.dtype).expand(
+        batch_size, max_length
+    ) >= lengths.unsqueeze(1)
+    return padding_mask

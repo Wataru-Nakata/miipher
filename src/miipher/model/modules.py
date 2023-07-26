@@ -1,5 +1,6 @@
 from torch import nn as nn
 import torch
+import math
 
 class FiLMLayer(nn.Module):
     def __init__(self,input_channels,intermediate_channels) -> None:
@@ -31,7 +32,7 @@ class PositionalEncoding(nn.Module):
         pe[:, 0, 1::2] = torch.cos(position * div_term)
         self.register_buffer('pe', pe)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Arguments:
             x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
@@ -113,8 +114,9 @@ class Postnet(nn.Module):
             )
 
     def forward(self, x):
+        x = x.transpose(1,2)
         for i in range(len(self.convolutions) - 1):
             x = torch.nn.functional.dropout(torch.tanh(self.convolutions[i](x)), 0.5, self.training)
         x = torch.nn.functional.dropout(self.convolutions[-1](x), 0.5, self.training)
-
+        x = x.transpose(1,2)
         return x

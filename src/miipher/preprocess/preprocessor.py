@@ -34,7 +34,8 @@ class Preprocessor:
         self.degration_model = DegrationApplier(cfg.preprocess.degration)
         self.text2phone_dict = dict()
         self.n_repeats = cfg.preprocess.n_repeats
-    @torch.no_grad()
+        self.phoneme_model.to('cuda')
+    @torch.inference_mode()
     def process_utterance(
         self,
         basename: str,
@@ -75,8 +76,8 @@ class Preprocessor:
                 "speech.wav": wav_bytes,
                 "degraded_speech.wav": buff.read(),
                 "resampled_speech.pth": webdataset.torch_dumps(waveform),
-                "clean_ssl_feature.pth": webdataset.torch_dumps( clean_ssl_feature.last_hidden_state[0].cpu()),
-                "degraded_ssl_feature.pth": webdataset.torch_dumps( degraded_ssl_feature.last_hidden_state[0].cpu()),
+                "clean_ssl_feature.pth": webdataset.torch_dumps( clean_ssl_feature),
+                "degraded_ssl_feature.pth": webdataset.torch_dumps( degraded_ssl_feature),
                 "phone_feature.pth": webdataset.torch_dumps(phone_feature),
                 "word_segmented_text.txt": word_segmented_text,
                 "clean_speaker_representation.pth": clean_speaker_representation,
@@ -99,8 +100,8 @@ class Preprocessor:
         )
         inputs.to("cuda")
         ssl_model.to("cuda")
-        ssl_feature = ssl_model(**inputs)
-        return ssl_feature
+        ssl_feature = ssl_model(**inputs,output_hidden_states=True)
+        return ssl_feature.hidden_states[feature_cfg.layer][0].cpu()
     
     @torch.no_grad()
     def extract_phone_feature(self,word_segmented_text,lang_code):
@@ -108,15 +109,16 @@ class Preprocessor:
             self.text2phone_dict[lang_code] = hydra.utils.instantiate(self.cfg.preprocess.text2phone_model,language=lang_code)
         input_phonemes = self.text2phone_dict[lang_code].infer_sentence(word_segmented_text)
         input_ids = self.phoneme_tokenizer(input_phonemes,return_tensors='pt')
+        input_ids.to('cuda')
         features = self.phoneme_model(**input_ids)
-        return features
+        return features.last_hidden_state[0].cpu()
     def extract_speaker_representation(self,waveform,sample_rate):
         xvector_model = self.xvector_model
         wav_tensor = torchaudio.functional.resample(
             waveform=waveform, orig_freq=sample_rate, new_freq=16_000
         )
         xvector = xvector_model.encode_batch(wav_tensor)
-        return xvector
+        return xvector.squeeze()
 
 
     def build_from_path(self):
@@ -129,6 +131,9 @@ class Preprocessor:
             wav_path = data['wav_path'][0]
             wav_tensor = data['wav_tensor'][0].float()
             sr = data['sr'][0]
+            # skip wavs longer than 20 secs
+            if max(wav_tensor.size())/sr >= 20.0:
+                continue
             word_segmented_text = data['word_segmented_text'][0]
             lang_code = data['lang_code'][0]
             if idx >= self.cfg.preprocess.val_size:
