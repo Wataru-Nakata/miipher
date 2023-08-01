@@ -83,10 +83,38 @@ preprocess:
           - '**/*.wav'
   train_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "preprocessed_data/wavlm_large-train-%06d.tar.gz"
+    pattern: "/mnt/hdd/preprocessed_data/wavlm_large-train-%06d.tar.gz"
   val_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "preprocessed_data/wavlm_large-val-%06d.tar.gz"
+    pattern: "/mnt/hdd/preprocessed_data/wavlm_large-val-%06d.tar.gz"
   val_size: 3000
   n_repeats: 4
 sample_rate: 22050
+
+data:
+  train_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000013}.tar.gz
+  val_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000013}.tar.gz
+  train_batch_size: 8
+  val_batch_size: 8
+train:
+  loggers:
+    - _target_: lightning.pytorch.loggers.WandbLogger
+      project: "miipher"
+  trainer:
+    _target_: lightning.Trainer
+    accelerator: "gpu"
+    devices: [0]
+    precision: 32 
+    check_val_every_n_epoch: 1
+    max_epochs: 3300
+    detect_anomaly: True
+model:
+  n_phone_feature: 768
+  n_speaker_embedding: 192
+  n_ssl_feature: 1024
+  n_hidden_dim: 1024
+  n_conformer_blocks: 4
+  n_iters: 2
+optimizers:
+  _target_: torch.optim.AdamW
+  lr: 1e-4

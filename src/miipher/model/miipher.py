@@ -25,6 +25,7 @@ class Miipher(nn.Module):
             postnet_n_convolutions=5
         )
         self.n_iters = n_iters
+        self.n_conformer_blocks = n_conformer_blocks
     def forward(self, phone_feature,speaker_feature, ssl_feature,ssl_feature_lengths):
         '''
         Args:   
@@ -46,10 +47,11 @@ class Miipher(nn.Module):
             pos_enc = self.positional_encoding(torch.tensor(iteration_count).unsqueeze(0).repeat(N))
             assert pos_enc.size(0) == N
             phone_speaker_feature = self.positional_encoding_film(phone_speaker_feature,pos_enc)
-            ssl_feature = self.conformer_blocks[iteration_count](ssl_feature,phone_speaker_feature,ssl_feature_lengths)
-            intermediates.append(ssl_feature)
-            ssl_feature = self.postnet(ssl_feature)
-            intermediates.append(ssl_feature)
+            for i in range(self.n_conformer_blocks):
+                ssl_feature = self.conformer_blocks[i](ssl_feature.clone(),phone_speaker_feature,ssl_feature_lengths)
+            intermediates.append(ssl_feature.clone())
+            ssl_feature += self.postnet(ssl_feature.clone())
+            intermediates.append(ssl_feature.clone())
         return ssl_feature, torch.stack(intermediates)
 
 
@@ -74,10 +76,9 @@ class FeatureCleanerBlock(nn.Module):
         self.layer_norm = nn.LayerNorm(1024)
     def forward(self,cleaning_feature,speaker_phone_feature,cleaning_feature_lengths):
         mask = _lengths_to_padding_mask(cleaning_feature_lengths).T
-
-        cleaning_feature += self.cross_attention(cleaning_feature,speaker_phone_feature,speaker_phone_feature,)[0]
-        cleaning_feature = self.layer_norm(cleaning_feature)
-        cleaning_feature += self.conformer_block(cleaning_feature,key_padding_mask=mask)
+        cleaning_feature += self.cross_attention(cleaning_feature.clone(),speaker_phone_feature,speaker_phone_feature,)[0]
+        cleaning_feature = self.layer_norm(cleaning_feature.clone())
+        cleaning_feature += self.conformer_block(cleaning_feature.clone(),key_padding_mask=mask)
         return cleaning_feature
 
 
