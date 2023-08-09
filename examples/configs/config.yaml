@@ -92,8 +92,8 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000013}.tar.gz
-  val_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000013}.tar.gz
+  train_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-train-{000001..001903}.tar.gz
+  val_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000014}.tar.gz
   train_batch_size: 8
   val_batch_size: 8
 train:
@@ -117,4 +117,4 @@ model:
   n_iters: 2
 optimizers:
   _target_: torch.optim.AdamW
-  lr: 1e-4
+  lr: 2e-5

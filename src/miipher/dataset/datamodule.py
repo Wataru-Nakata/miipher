@@ -21,7 +21,7 @@ class MiipherDataModule(LightningDataModule):
             self.train_dataset,
             batch_size=self.cfg.data.train_batch_size,
             collate_fn=self.collate_fn,
-            num_workers=8
+            num_workers=20
         )
 
     def val_dataloader(self):
@@ -29,7 +29,7 @@ class MiipherDataModule(LightningDataModule):
             self.train_dataset,
             batch_size=self.cfg.data.val_batch_size,
             collate_fn=self.collate_fn,
-            num_workers=8
+            num_workers=20
         )
     @torch.no_grad()
     def collate_fn(self, batch):

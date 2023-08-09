@@ -44,7 +44,7 @@ class Miipher(nn.Module):
 
         phone_speaker_feature = self.phone_speaker_film(phone_feature,speaker_feature.unsqueeze(1))
         for iteration_count in range(self.n_iters):
-            pos_enc = self.positional_encoding(torch.tensor(iteration_count).unsqueeze(0).repeat(N))
+            pos_enc = self.positional_encoding(torch.tensor(iteration_count,device=self.device).unsqueeze(0).repeat(N))
             assert pos_enc.size(0) == N
             phone_speaker_feature = self.positional_encoding_film(phone_speaker_feature,pos_enc)
             for i in range(self.n_conformer_blocks):
@@ -53,6 +53,9 @@ class Miipher(nn.Module):
             ssl_feature += self.postnet(ssl_feature.clone())
             intermediates.append(ssl_feature.clone())
         return ssl_feature, torch.stack(intermediates)
+    @property
+    def device(self):
+        return next(iter(self.parameters())).device
 
 
 
