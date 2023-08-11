@@ -11,7 +11,6 @@ from miipher.dataset.datamodule import MiipherDataModule
 def main(cfg: DictConfig):
     seed_everything(1234)
     torch.set_float32_matmul_precision('medium')
-    torch.autograd.set_detect_anomaly(True)
     lightning_module = MiipherLightningModule(cfg)
     datamodule = MiipherDataModule(cfg)
     loggers = hydra.utils.instantiate(cfg.train.loggers)

@@ -13,7 +13,7 @@ class MiipherDataModule(LightningDataModule):
             wds.WebDataset(self.cfg.data.train_dataset_path).shuffle(1000).decode(wds.torch_audio)
         )
         self.val_dataset = (
-            wds.WebDataset(self.cfg.data.train_dataset_path).shuffle(1000).decode(wds.torch_audio)
+            wds.WebDataset(self.cfg.data.val_dataset_path).shuffle(1000).decode(wds.torch_audio)
         )
     
     def train_dataloader(self):
@@ -26,7 +26,7 @@ class MiipherDataModule(LightningDataModule):
 
     def val_dataloader(self):
         return DataLoader(
-            self.train_dataset,
+            self.val_dataset,
             batch_size=self.cfg.data.val_batch_size,
             collate_fn=self.collate_fn,
             num_workers=20
