@@ -10,10 +10,10 @@ class MiipherDataModule(LightningDataModule):
         self.cfg = cfg
     def setup(self, stage:str):
         self.train_dataset = (
-            wds.WebDataset(self.cfg.data.train_dataset_path).shuffle(1000).decode(wds.torch_audio)
+            wds.WebDataset(self.cfg.data.train_dataset_path,resampled=True).shuffle(1000).decode(wds.torch_audio).with_epoch(50_0000)
         )
         self.val_dataset = (
-            wds.WebDataset(self.cfg.data.val_dataset_path).shuffle(1000).decode(wds.torch_audio)
+            wds.WebDataset(self.cfg.data.val_dataset_path).decode(wds.torch_audio)
         )
     
     def train_dataloader(self):

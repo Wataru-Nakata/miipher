@@ -92,10 +92,10 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-train-{000001..001903}.tar.gz
-  val_dataset_path: /mnt/hdd/preprocessed_data/wavlm_large-val-{000001..000014}.tar.gz
-  train_batch_size: 8
-  val_batch_size: 8
+  train_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-train-{000001..001903}.tar.gz
+  val_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-val-{000001..000014}.tar.gz
+  train_batch_size: 32
+  val_batch_size: 16
 train:
   loggers:
     - _target_: lightning.pytorch.loggers.WandbLogger
@@ -103,8 +103,8 @@ train:
   trainer:
     _target_: lightning.Trainer
     accelerator: "gpu"
-    devices: [0]
-    precision: 32 
+    devices: 8
+    precision: bf16-mixed 
     check_val_every_n_epoch: 1
     max_epochs: 3300
     detect_anomaly: True
