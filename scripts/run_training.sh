@@ -1,6 +1,6 @@
 #! /bin/bash
 #$ -l rt_AF=1
-#$ -l h_rt=168:00:00
+#$ -l h_rt=1:00:00
 #$ -j y
 #$-cwd
 source /etc/profile.d/modules.sh

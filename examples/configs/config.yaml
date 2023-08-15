@@ -92,8 +92,9 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-train-{000001..001903}.tar.gz
-  val_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-val-{000001..000014}.tar.gz
+  dataset_root: /mnt/hdd/preprocessed_data/
+  train_dataset_pattern: wavlm_large-train-*.tar.gz
+  val_dataset_pattern: wavlm_large-val-*.tar.gz
   train_batch_size: 32
   val_batch_size: 16
 train:
@@ -103,7 +104,8 @@ train:
   trainer:
     _target_: lightning.Trainer
     accelerator: "gpu"
-    devices: 8
+    devices: -1
+    strategy: ddp
     precision: bf16-mixed 
     check_val_every_n_epoch: 1
     max_epochs: 3300
