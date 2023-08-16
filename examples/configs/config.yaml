@@ -103,7 +103,7 @@ train:
   trainer:
     _target_: lightning.Trainer
     accelerator: "gpu"
-    devices: 8
+    devices: -1
     precision: bf16-mixed 
     check_val_every_n_epoch: 1
     max_epochs: 3300
