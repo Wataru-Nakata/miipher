@@ -12,19 +12,19 @@ class MiipherDataModule(LightningDataModule):
         super().__init__()
         self.cfg = cfg
     def setup(self, stage:str):
-        self.train_dataset = self.setup_datapipe(self.cfg.data.dataset_root,self.cfg.data.train_dataset_pattern)
-        self.val_dataset = self.setup_datapipe(self.cfg.data.dataset_root,self.cfg.data.val_dataset_pattern)
+        self.train_dataset = self.setup_datapipe(self.cfg.data.dataset_root,self.cfg.data.train_dataset_pattern).set_length(20_000*self.cfg.data.train_batch_size)
+        self.val_dataset = self.setup_datapipe(self.cfg.data.dataset_root,self.cfg.data.val_dataset_pattern).set_length(3000*4//self.cfg.data.val_batch_size)
 
     def setup_datapipe(self,root,pattern,shuffle=False):
-        datapipe1 = FileLister(root,pattern)
+        datapipe1 = FileLister(root,pattern).sharding_filter()
         if shuffle:
             datapipe1 = datapipe1.shuffle()
         datapipe2 = FileOpener(datapipe1,mode='b')
-        dataset = datapipe2.load_from_tar().webdataset().map(torch_audio).map(basic_decode)
+        dataset = datapipe2.load_from_tar().webdataset().shuffle().map(torch_audio).map(basic_decode)
         return dataset
     
     def train_dataloader(self):
-        return wds.WebLoader(
+        return DataLoader(
             self.train_dataset,
             batch_size=self.cfg.data.train_batch_size,
             collate_fn=self.collate_fn,
@@ -32,7 +32,7 @@ class MiipherDataModule(LightningDataModule):
         )
 
     def val_dataloader(self):
-        return wds.WebLoader(
+        return DataLoader(
             self.val_dataset,
             batch_size=self.cfg.data.val_batch_size,
             collate_fn=self.collate_fn,
@@ -41,6 +41,7 @@ class MiipherDataModule(LightningDataModule):
     @torch.no_grad()
     def collate_fn(self, batch):
         output = dict()
+        print(batch[0]['__key__'])
         output['speaker'] = torch.stack([b['.degraded_speaker_representation.pth'] for b in batch])
         output['phone'] = pad_sequence([b['.phone_feature.pth'] for b in batch],batch_first=True)
         output['degraded_ssl'] = pad_sequence([b['.degraded_ssl_feature.pth'] for b in batch],batch_first=True)

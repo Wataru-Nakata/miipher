@@ -95,7 +95,7 @@ data:
   dataset_root: /mnt/hdd/preprocessed_data/
   train_dataset_pattern: wavlm_large-train-*.tar.gz
   val_dataset_pattern: wavlm_large-val-*.tar.gz
-  train_batch_size: 32
+  train_batch_size: 16
   val_batch_size: 16
 train:
   loggers:
