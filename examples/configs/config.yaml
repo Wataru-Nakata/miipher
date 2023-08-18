@@ -79,10 +79,19 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /scratch/acc12576tt/miipher/wavlm_large-train-{000001..001903}.tar.gz
-  val_dataset_path: /scratch/acc12576tt/miipher/wavlm_large-val-{000001..000014}.tar.gz
-  train_batch_size: 32
-  val_batch_size: 16
+  train_dataset_path: /mnt/hdd/miipher/miipher-val-{000001..000005}.tar.gz
+  val_dataset_path: /mnt/hdd/miipher/miipher-val-{000001..000014}.tar.gz
+  train_batch_size: 8
+  val_batch_size: 8
+  speech_ssl_processor:
+    processor:
+      _target_: transformers.AutoFeatureExtractor.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
+    sr: 16_000
+  phoneme_padding_idx: 1
+  phoneme_tokenizer:
+    _target_: transformers.AutoTokenizer.from_pretrained
+    pretrained_model_name_or_path: "vinai/xphonebert-base"
 train:
   loggers:
     - _target_: lightning.pytorch.loggers.WandbLogger
@@ -97,24 +106,24 @@ train:
     detect_anomaly: True
 model:
   ssl_models:
-    - _target_: transformers.AutoModel.from_pretrained
+    model:
+      _target_: transformers.AutoModel.from_pretrained
       pretrained_model_name_or_path: "microsoft/wavlm-large"
-    - _target_: transformers.AutoFeatureExtractor.from_pretrained
-      pretrained_model_name_or_path: "microsoft/wavlm-large"
-    - sr: 16_000
-      layer: 8
+    sr: 16_000
+    layer: 8
   phoneme_model:
     _target_: transformers.AutoModel.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
   xvector_model:
     _target_: speechbrain.pretrained.EncoderClassifier.from_hparams
     source: speechbrain/spkrec-ecapa-voxceleb
-  n_phone_feature: 768
-  n_speaker_embedding: 192
-  n_ssl_feature: 1024
-  n_hidden_dim: 1024
-  n_conformer_blocks: 4
-  n_iters: 2
+  miipher:
+    n_phone_feature: 768
+    n_speaker_embedding: 192
+    n_ssl_feature: 1024
+    n_hidden_dim: 1024
+    n_conformer_blocks: 4
+    n_iters: 2
 optimizers:
   _target_: torch.optim.AdamW
   lr: 2e-5
