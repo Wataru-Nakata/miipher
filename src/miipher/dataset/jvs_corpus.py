@@ -37,8 +37,6 @@ class JVSCorpus(Dataset):
         basename= f"{subset}_{speaker}_{wav_name}"
         tokenized = self.tokenizer.parse(clean_text)
         output = {
-            "wav_tensor": wav_tensor,
-            "sr": sr,
             "wav_path": str(wav_path),
             "speaker": speaker,
             "clean_text": clean_text,

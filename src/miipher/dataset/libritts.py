@@ -10,7 +10,6 @@ class LibriTTSCorpus(Dataset):
         self.wav_files = [x for x in self.wav_files if (Path(str(x).replace(".wav",".normalized.txt")).exists() and Path(str(x).replace(".wav",".original.txt")).exists())]
     def __getitem__(self, index):
         wav_path = self.wav_files[index]
-        wav_tensor,sr = torchaudio.load(wav_path)
         wav_path = wav_path.resolve()
         basename = wav_path.stem
         m = re.search(r"^(\d+?)\_(\d+?)\_(\d+?\_\d+?)$", basename)
@@ -27,8 +26,6 @@ class LibriTTSCorpus(Dataset):
         punc_text = line
 
         output = {
-            "wav_tensor": wav_tensor,
-            "sr": sr,
             "wav_path": str(wav_path),
             "speaker": speaker,
             "chapter": chapter,

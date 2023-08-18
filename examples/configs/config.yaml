@@ -8,22 +8,9 @@ preprocess:
       - 
         _target_: miipher.dataset.libritts.LibriTTSCorpus
         root: /mnt/hdd/datasets/libritts-r/LibriTTS_R/
-  ssl_models:
-    - _target_: transformers.AutoModel.from_pretrained
-      pretrained_model_name_or_path: "microsoft/wavlm-large"
-    - _target_: transformers.AutoFeatureExtractor.from_pretrained
-      pretrained_model_name_or_path: "microsoft/wavlm-large"
-    - sr: 16_000
-      layer: 8
-  phoneme_model:
-    _target_: transformers.AutoModel.from_pretrained
-    pretrained_model_name_or_path: "vinai/xphonebert-base"
   phoneme_tokenizer:
     _target_: transformers.AutoTokenizer.from_pretrained
     pretrained_model_name_or_path: "vinai/xphonebert-base"
-  xvector_model:
-    _target_: speechbrain.pretrained.EncoderClassifier.from_hparams
-    source: speechbrain/spkrec-ecapa-voxceleb
   text2phone_model:
     _target_: text2phonemesequence.Text2PhonemeSequence
     is_cuda: True
@@ -83,17 +70,17 @@ preprocess:
           - '**/*.wav'
   train_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "/mnt/hdd/preprocessed_data/wavlm_large-train-%06d.tar.gz"
+    pattern: "/mnt/hdd/miipher/miipher-train-%06d.tar.gz"
   val_tar_sink:
     _target_: webdataset.ShardWriter
-    pattern: "/mnt/hdd/preprocessed_data/wavlm_large-val-%06d.tar.gz"
+    pattern: "/mnt/hdd/miipher/miipher-val-%06d.tar.gz"
   val_size: 3000
   n_repeats: 4
 sample_rate: 22050
 
 data:
-  train_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-train-{000001..001903}.tar.gz
-  val_dataset_path: /scratch/acc12576tt/preprocessed_data/wavlm_large-val-{000001..000014}.tar.gz
+  train_dataset_path: /scratch/acc12576tt/miipher/wavlm_large-train-{000001..001903}.tar.gz
+  val_dataset_path: /scratch/acc12576tt/miipher/wavlm_large-val-{000001..000014}.tar.gz
   train_batch_size: 32
   val_batch_size: 16
 train:
@@ -109,6 +96,19 @@ train:
     max_epochs: 3300
     detect_anomaly: True
 model:
+  ssl_models:
+    - _target_: transformers.AutoModel.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
+    - _target_: transformers.AutoFeatureExtractor.from_pretrained
+      pretrained_model_name_or_path: "microsoft/wavlm-large"
+    - sr: 16_000
+      layer: 8
+  phoneme_model:
+    _target_: transformers.AutoModel.from_pretrained
+    pretrained_model_name_or_path: "vinai/xphonebert-base"
+  xvector_model:
+    _target_: speechbrain.pretrained.EncoderClassifier.from_hparams
+    source: speechbrain/spkrec-ecapa-voxceleb
   n_phone_feature: 768
   n_speaker_embedding: 192
   n_ssl_feature: 1024
