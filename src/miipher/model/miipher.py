@@ -51,7 +51,6 @@ class Miipher(nn.Module):
         speaker_feature = self.speaker_linear(speaker_feature)
         ssl_feature = self.ssl_linear(ssl_feature)
         intermediates = []
-        print(phone_feature.size(), speaker_feature.size(), ssl_feature.size())
         phone_speaker_feature = self.phone_speaker_film(
             phone_feature, speaker_feature.unsqueeze(1)
         )

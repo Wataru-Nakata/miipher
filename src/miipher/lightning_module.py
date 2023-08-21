@@ -25,7 +25,7 @@ class MiipherLightningModule(LightningModule):
         self.xvector_model = hydra.utils.instantiate(cfg.model.xvector_model)
         self.xvector_model.eval()
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def extract_features(self, inputs):
         wav_16k = inputs["degraded_wav_16k"]
         wav_16k_lens = inputs["degraded_wav_16k_lengths"]
@@ -62,10 +62,10 @@ class MiipherLightningModule(LightningModule):
         ) = self.extract_features(batch)
 
         cleaned_feature, intermediates = self.miipher.forward(
-            phone_feature, speaker_feature, degraded_ssl_feature
+            phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
         )
         loss = self.criterion(intermediates, clean_ssl_feature)
-        self.log("train/loss", loss, batch_size=phone_feature.size(0))
+        self.log("train/loss", loss, batch_size=phone_feature.size(0),prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx) -> STEP_OUTPUT | None:
