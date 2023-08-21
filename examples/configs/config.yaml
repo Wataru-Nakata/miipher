@@ -74,14 +74,14 @@ preprocess:
   val_tar_sink:
     _target_: webdataset.ShardWriter
     pattern: "/mnt/hdd/miipher/miipher-val-%06d.tar.gz"
-  val_size: 3000
+  val_size: 6000
   n_repeats: 4
 sample_rate: 22050
 
 data:
-  train_dataset_path: /mnt/hdd/miipher/miipher-train-{000000..000663}.tar.gz
-  val_dataset_path: /mnt/hdd/miipher/miipher-val-{000000..000007}.tar.gz
-  train_batch_size: 8
+  train_dataset_path: /scratch/acc12576tt/miipher/miipher-train-{000000..000663}.tar.gz
+  val_dataset_path: /scratch/acc12576tt/miipher/miipher-val-{000000..000007}.tar.gz
+  train_batch_size: 24
   val_batch_size: 8
   speech_ssl_processor:
     processor:
