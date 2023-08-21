@@ -64,7 +64,7 @@ class MiipherLightningModule(LightningModule):
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
         )
-        loss = self.criterion(intermediates, clean_ssl_feature)
+        loss = self.criterion(intermediates, clean_ssl_feature,log=True,stage='train')
         self.log("train/loss", loss, batch_size=phone_feature.size(0),prog_bar=True)
         return loss
 
@@ -78,26 +78,27 @@ class MiipherLightningModule(LightningModule):
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature, speaker_feature, degraded_ssl_feature
         )
-        loss = self.criterion(intermediates, clean_ssl_feature)
+        loss = self.criterion(intermediates, clean_ssl_feature,log=True,stage='val')
         self.log("val/loss", loss, batch_size=phone_feature.size(0))
         return loss
 
     def configure_optimizers(self):
         return hydra.utils.instantiate(self.cfg.optimizers, params=self.parameters())
 
-    def criterion(self, intermediates: List[torch.Tensor], target: torch.Tensor):
+    def criterion(self, intermediates: List[torch.Tensor], target: torch.Tensor,log=False,stage='train'):
         loss = 0
         minimum_length = min(intermediates[0].size(1), target.size(1))
         target = target[:, :minimum_length, :].clone()
-        for intermediate in intermediates:
+        for idx, intermediate in enumerate(intermediates):
             intermediate = intermediate[:, :minimum_length, :].clone()
             loss = loss + self.mae_loss(intermediate, target).clone()
-            loss = loss + self.mse_loss(intermediate, target).clone()
-            loss = (
-                loss
-                + (
-                    (intermediate - target).norm(p=2, dim=(1, 2)).pow(2)
-                    / (target.norm(p=2, dim=(1, 2)))
-                ).mean()
-            )
+            mae_loss = self.mae_loss(intermediate, target)
+            mse_loss = self.mse_loss(intermediate, target)
+            spectoral_loss = ( (intermediate - target).norm(p=2, dim=(1, 2)).pow(2) / (target.norm(p=2, dim=(1, 2)).pow(2))).mean()
+            loss += mae_loss + mse_loss + spectoral_loss
+            if log:
+                self.log(f'{stage}/{idx}/mae_loss', mae_loss)
+                self.log(f'{stage}/{idx}/mse_loss', mse_loss)
+                self.log(f'{stage}/{idx}/spectoral_loss', spectoral_loss)
+
         return loss
