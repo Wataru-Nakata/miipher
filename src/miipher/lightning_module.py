@@ -9,24 +9,18 @@ import torch
 import hydra
 
 
-class MiipherLightningModule(LightningModule):
-    def __init__(self, cfg: DictConfig) -> None:
-        super().__init__()
-
-        self.miipher = Miipher(**cfg.model.miipher)
-        self.mse_loss = nn.MSELoss()
-        self.mae_loss = nn.L1Loss()
-        self.cfg = cfg
-        self.save_hyperparameters()
+class FeatureExtractor():
+    def __init__(self,cfg) -> None:
         self.speech_ssl_model = hydra.utils.instantiate(cfg.model.ssl_models.model)
         self.speech_ssl_model.eval()
         self.phoneme_model = hydra.utils.instantiate(cfg.model.phoneme_model)
         self.phoneme_model.eval()
         self.xvector_model = hydra.utils.instantiate(cfg.model.xvector_model)
         self.xvector_model.eval()
+        self.cfg = cfg
 
     @torch.inference_mode()
-    def extract_features(self, inputs):
+    def __call__(self, inputs):
         wav_16k = inputs["degraded_wav_16k"]
         wav_16k_lens = inputs["degraded_wav_16k_lengths"]
         feats = self.xvector_model.mods.compute_features(wav_16k)
@@ -53,13 +47,33 @@ class MiipherLightningModule(LightningModule):
 
         return phone_feature, xvector, degraded_ssl_feature, clean_ssl_feature
 
+    def to(self,device:torch.device):
+        print(device)
+        self.speech_ssl_model = self.speech_ssl_model.to(device)
+        self.phoneme_model = self.phoneme_model.to(device)
+        self.xvector_model = self.xvector_model.to(device)
+
+class MiipherLightningModule(LightningModule):
+    def __init__(self, cfg: DictConfig) -> None:
+        super().__init__()
+
+        self.miipher = Miipher(**cfg.model.miipher)
+        self.mse_loss = nn.MSELoss()
+        self.mae_loss = nn.L1Loss()
+        self.cfg = cfg
+        self.feature_extractor = FeatureExtractor(cfg)
+        self.save_hyperparameters()
+
+    def on_fit_start(self):
+        self.feature_extractor.to(self.device)
+
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
         (
             phone_feature,
             speaker_feature,
             degraded_ssl_feature,
             clean_ssl_feature,
-        ) = self.extract_features(batch)
+        ) = self.feature_extractor(batch)
 
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
@@ -74,7 +88,7 @@ class MiipherLightningModule(LightningModule):
             speaker_feature,
             degraded_ssl_feature,
             clean_ssl_feature,
-        ) = self.extract_features(batch)
+        ) = self.feature_extractor(batch)
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature, speaker_feature, degraded_ssl_feature
         )
@@ -83,7 +97,7 @@ class MiipherLightningModule(LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return hydra.utils.instantiate(self.cfg.optimizers, params=self.parameters())
+        return hydra.utils.instantiate(self.cfg.optimizers, params=self.miipher.parameters())
 
     def criterion(self, intermediates: List[torch.Tensor], target: torch.Tensor,log=False,stage='train'):
         loss = 0
