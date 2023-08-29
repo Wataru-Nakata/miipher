@@ -3,8 +3,10 @@ from lightning.pytorch import LightningModule
 from lightning.pytorch.utilities.types import STEP_OUTPUT
 from .model.miipher import Miipher
 from omegaconf import DictConfig
+from lightning.pytorch import loggers
 from torch import nn
 from typing import List
+from lightning_vocoders.models.hifigan.xvector_lightning_module import HiFiGANXvectorLightningModule
 import torch
 import hydra
 
@@ -78,7 +80,8 @@ class MiipherLightningModule(LightningModule):
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature.clone(), speaker_feature.clone(), degraded_ssl_feature.clone()
         )
-        loss = self.criterion(intermediates, clean_ssl_feature,log=True,stage='train')
+        with torch.cuda.amp.autocast(enabled=False):
+            loss = self.criterion(intermediates.float(), clean_ssl_feature.float(),log=True,stage='train')
         self.log("train/loss", loss, batch_size=phone_feature.size(0),prog_bar=True)
         return loss
 
@@ -92,8 +95,14 @@ class MiipherLightningModule(LightningModule):
         cleaned_feature, intermediates = self.miipher.forward(
             phone_feature, speaker_feature, degraded_ssl_feature
         )
-        loss = self.criterion(intermediates, clean_ssl_feature,log=True,stage='val')
+        with torch.cuda.amp.autocast(enabled=False):
+            loss = self.criterion(intermediates.float(), clean_ssl_feature.float(),log=True,stage='val')
         self.log("val/loss", loss, batch_size=phone_feature.size(0))
+        if batch_idx < 10 and self.global_rank == 0 and self.local_rank==0:
+            cleaned_wav = self.synthesis(cleaned_feature[0], batch["degraded_wav_16k"][0], batch["degraded_wav_16k_lengths"][0])
+            self.log_audio(cleaned_wav, f"val/cleaned_wav/{batch_idx}", 22050)
+            input_wav = self.synthesis(degraded_ssl_feature[0], batch["degraded_wav_16k"][0], batch["degraded_wav_16k_lengths"][0])
+            self.log_audio(input_wav, f"val/input_wav/{batch_idx}", 22050)
         return loss
 
     def configure_optimizers(self):
@@ -108,7 +117,7 @@ class MiipherLightningModule(LightningModule):
             loss = loss + self.mae_loss(intermediate, target).clone()
             mae_loss = self.mae_loss(intermediate, target)
             mse_loss = self.mse_loss(intermediate, target)
-            spectoral_loss = ( (intermediate - target).norm(p=2, dim=(1, 2)).pow(2) / (target.norm(p=2, dim=(1, 2)).pow(2))).mean()
+            spectoral_loss = ( (intermediate - target + 1e-7).norm(p=2, dim=(1, 2)).pow(2) / (target.norm(p=2, dim=(1, 2)).pow(2))).mean()
             loss += mae_loss + mse_loss + spectoral_loss
             if log:
                 self.log(f'{stage}/{idx}/mae_loss', mae_loss)
@@ -116,3 +125,30 @@ class MiipherLightningModule(LightningModule):
                 self.log(f'{stage}/{idx}/spectoral_loss', spectoral_loss)
 
         return loss
+    @torch.inference_mode()
+    def synthesis(self,features:torch.Tensor,wav16k,wav16k_lens):
+        vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint("https://huggingface.co/Wataru/ssl-vocoder/resolve/main/wavlm-large-l8-xvector/model.ckpt",map_location='cpu')
+        vocoder.eval()
+        xvector_model = hydra.utils.instantiate(vocoder.cfg.data.xvector.model)
+        xvector_model.eval()
+        xvector = xvector_model.encode_batch(wav16k.unsqueeze(0).cpu()).squeeze(1)
+        vocoder = vocoder.float()
+        return vocoder.generator_forward({"input_feature": features.unsqueeze(0).cpu().float(), "xvector": xvector.cpu().float()})[0].T
+
+    def log_audio(self, audio, name, sampling_rate):
+        for logger in self.loggers:
+            match type(logger):
+                case loggers.WandbLogger:
+                    import wandb
+
+                    wandb.log(
+                        {name: wandb.Audio(audio, sample_rate=sampling_rate)},
+                        step=self.global_step,
+                    )
+                case loggers.TensorBoardLogger:
+                    logger.experiment.add_audio(
+                        name,
+                        audio,
+                        self.global_step,
+                        sampling_rate,
+                    )

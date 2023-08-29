@@ -5,7 +5,7 @@ description = "Add a short description here"
 authors = [
     { name = "Wataru Nakata", email = "wataru9871@gmail.com" }
 ]
-dependencies = ["lightning~=2.0.5", "torchaudio~=2.0.2", "speechbrain~=0.5.14", "matplotlib~=3.7.2", "pyroomacoustics~=0.7.3", "hydra-core~=1.3.2", "webdataset~=0.2.48", "transformers~=4.31.0", "text2phonemesequence~=0.1.4", "mecab-python3~=1.0.6", "unidic~=1.1.0", "wandb~=0.15.7"]
+dependencies = ["lightning~=2.0.5", "torchaudio~=2.0.2", "speechbrain~=0.5.14", "matplotlib~=3.7.2", "pyroomacoustics~=0.7.3", "hydra-core~=1.3.2", "webdataset~=0.2.48", "text2phonemesequence~=0.1.4", "mecab-python3~=1.0.6", "unidic~=1.1.0", "wandb~=0.15.7", "lightning_vocoders @ git+https://github.com/Wataru-Nakata/ssl-vocoders", "llvmlite~=0.40.1"]
 readme = "README.md"
 requires-python = ">= 3.10"
 
