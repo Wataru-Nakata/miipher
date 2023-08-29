@@ -79,9 +79,9 @@ preprocess:
 sample_rate: 22050
 
 data:
-  train_dataset_path: /scratch/acc12576tt/miipher/miipher-train-{000000..000663}.tar.gz
-  val_dataset_path: /scratch/acc12576tt/miipher/miipher-val-{000000..000007}.tar.gz
-  train_batch_size: 24
+  train_dataset_path: /mnt/hdd/miipher/miipher-train-{000000..000663}.tar.gz
+  val_dataset_path: /mnt/hdd/miipher/miipher-val-{000000..000007}.tar.gz
+  train_batch_size: 8
   val_batch_size: 8
   speech_ssl_processor:
     processor:
@@ -103,7 +103,6 @@ train:
     precision: bf16-mixed 
     check_val_every_n_epoch: 1
     max_epochs: 3300
-    detect_anomaly: True
 model:
   ssl_models:
     model:
@@ -126,4 +125,4 @@ model:
     n_iters: 2
 optimizers:
   _target_: torch.optim.AdamW
-  lr: 2e-5
+  lr: 1e-5
