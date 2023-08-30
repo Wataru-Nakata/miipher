@@ -65,13 +65,13 @@ class MiipherDataModule(LightningDataModule):
         for sample in batch:
             clean_wav, sr = sample["speech.wav"]
             clean_wav_16ks.append(
-                torchaudio.functional.resample(clean_wav, sr, new_freq=16000).squeeze()
+                torchaudio.functional.resample(clean_wav, sr, new_freq=16000).squeeze()[:16000*20]
             )
             degraded_wav, sr = sample["degraded_speech.wav"]
             degraded_wav_16ks.append(
                 torchaudio.functional.resample(
                     degraded_wav, sr, new_freq=16000
-                ).squeeze()
+                ).squeeze()[:16000*20]
             )
         output["degraded_wav_16k"] = pad_sequence(degraded_wav_16ks, batch_first=True)
         output["degraded_wav_16k_lengths"] = torch.tensor(
