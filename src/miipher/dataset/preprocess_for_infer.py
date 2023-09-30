@@ -20,7 +20,7 @@ class PreprocessForInfer(torch.nn.Module):
     def get_phonemes_input_ids(self, word_segmented_text, lang_code):
         if lang_code not in self.text2phone_dict.keys():
             self.text2phone_dict[lang_code] = hydra.utils.instantiate(
-                self.cfg.preprocess.text2phone_model, language=lang_code
+                self.cfg.preprocess.text2phone_model, language=lang_code, is_cuda=False
             )
         input_phonemes = self.text2phone_dict[lang_code].infer_sentence(
             word_segmented_text
