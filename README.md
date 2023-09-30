@@ -12,9 +12,11 @@ pip install git+https://github.com/Wataru-Nakata/miipher
 # Pretrained model
 The pretrained model is trained on [LibriTTS-R](http://www.openslr.org/141/) and [JVS corpus](https://sites.google.com/site/shinnosuketakamichi/research-topics/jvs_corpus),
 and provided in **CC-BY-NC-2.0 license**.
+
 To use pretrained model, please refere to `examples/demo.py`
 
 # LICENSE
 Code in this repo: MIT License
+
 Weights on huggingface: CC-BY-NC-2.0 license
 
