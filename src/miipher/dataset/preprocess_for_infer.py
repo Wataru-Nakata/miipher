@@ -29,27 +29,30 @@ class PreprocessForInfer(torch.nn.Module):
         return input_ids, input_phonemes
     def process(self,basename, degraded_audio,word_segmented_text=None,lang_code=None, phoneme_text=None):
         degraded_audio,sr = degraded_audio
+        output = dict()
 
         if word_segmented_text != None and  lang_code != None:
             input_ids, input_phonems = self.get_phonemes_input_ids(
                 word_segmented_text, lang_code
             )
+            output['phoneme_input_ids'] = input_ids
         elif phoneme_text == None:
             raise ValueError
+        else:
+            output["phoneme_input_ids"] = self.phoneme_tokenizer(
+                phoneme_text, return_tensors="pt", padding=True
+            )
+
         degraded_16k = torchaudio.functional.resample(
             degraded_audio, sr, new_freq=16000
         ).squeeze()
         degraded_wav_16ks = [degraded_16k]
 
-        output = dict()
         output["degraded_ssl_input"] = self.speech_ssl_processor(
             [x.numpy() for x in degraded_wav_16ks],
             return_tensors="pt",
             sampling_rate=16000,
             padding=True,
-        )
-        output["phoneme_input_ids"] = self.phoneme_tokenizer(
-            phoneme_text, return_tensors="pt", padding=True
         )
         output["degraded_wav_16k"] = pad_sequence(degraded_wav_16ks, batch_first=True)
         output["degraded_wav_16k_lengths"] = torch.tensor(
