@@ -7,9 +7,9 @@ import torchaudio
 import hydra
 import tempfile
 
-miipher_path = "miipher/0kt6hnn2/checkpoints/epoch=19-step=400000.ckpt"
+miipher_path = "https://huggingface.co/spaces/Wataru/Miipher/resolve/main/miipher.ckpt"
 miipher = MiipherLightningModule.load_from_checkpoint(miipher_path,map_location='cpu')
-vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint("../vocoder_finetuned.ckpt",map_location='cpu')
+vocoder = HiFiGANXvectorLightningModule.load_from_checkpoint("https://huggingface.co/spaces/Wataru/Miipher/resolve/main/vocoder_finetuned.ckpt",map_location='cpu')
 xvector_model = hydra.utils.instantiate(vocoder.cfg.data.xvector.model)
 xvector_model = xvector_model.to('cpu')
 preprocessor = PreprocessForInfer(miipher.cfg)
