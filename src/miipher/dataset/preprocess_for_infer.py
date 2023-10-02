@@ -49,7 +49,7 @@ class PreprocessForInfer(torch.nn.Module):
         degraded_wav_16ks = [degraded_16k]
 
         output["degraded_ssl_input"] = self.speech_ssl_processor(
-            [x.numpy() for x in degraded_wav_16ks],
+            [x.cpu().numpy() for x in degraded_wav_16ks],
             return_tensors="pt",
             sampling_rate=16000,
             padding=True,
