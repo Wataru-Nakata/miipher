@@ -9,6 +9,22 @@ from pathlib import Path
 from tqdm import tqdm
 
 
+def align_waveform(wav1, wav2):
+    assert wav2.size(1) >= wav1.size(1)
+    diff = wav2.size(1) - wav1.size(1)
+    min_mse = float("inf")
+    best_i = -1
+
+    for i in range(diff):
+        segment = wav2[:, i : i + wav1.size(1)]
+        mse = torch.mean((wav1 - segment) ** 2).item()
+        if mse < min_mse:
+            min_mse = mse
+            best_i = i
+
+    return best_i, wav2[:, best_i : best_i + wav1.size(1)]
+
+
 class DegrationApplier:
     def __init__(self, cfg) -> None:
         self.format_encoding_pairs = cfg.format_encoding_pairs
@@ -25,16 +41,22 @@ class DegrationApplier:
         if len(self.format_encoding_pairs) == 0:
             return waveform
         param = random.choice(self.format_encoding_pairs)
-        waveform = torchaudio.functional.apply_codec(
+        augmented = torchaudio.functional.apply_codec(
             waveform=waveform.float(), sample_rate=sample_rate, **param
         )
-        return waveform.float()
+        # mp3 encoding may increase the length of the waveform by zero-padding
+        if waveform.size(1) != augmented.size(1):
+            best_idx, augmented = align_waveform(waveform, augmented)
+        return augmented.float()
 
     def applyReverb(self, waveform):
         if len(self.rirs) == 0:
             raise RuntimeError
         rir = random.choice(self.rirs)
         augmented = torchaudio.functional.fftconvolve(waveform, rir)
+        # rir convolution may increase the length of the waveform
+        if waveform.size(1) != augmented.size(1):
+            augmented = augmented[:, : waveform.size(1)]
         return augmented.float()
 
     def prepare_rir(self, n_rirs):
@@ -81,10 +103,12 @@ class DegrationApplier:
     def process(self, waveform, sample_rate):
         if len(waveform.shape) == 1:
             waveform = waveform.unsqueeze(0)
+        org_len = waveform.size(1)
         waveform = self.applyBackgroundNoise(waveform, sample_rate)
         if random.random() > self.cfg.reverb_conditions.p:
             waveform = self.applyReverb(waveform)
         waveform = self.applyCodec(waveform, sample_rate)
+        assert org_len == waveform.size(1), f"{org_len}, {waveform.size(1)}"
         return waveform.squeeze()
 
     def __call__(self, waveform, sample_rate):
