@@ -95,9 +95,12 @@ class DegrationApplier:
             noise = noise.repeat(1, waveform.size(1) // noise.size(1) + 1)[
                 :, : waveform.size(1)
             ]
-        augmented = torchaudio.functional.add_noise(
-            waveform=waveform, noise=noise, snr=torch.tensor([snr])
-        )
+        if noise.abs().max() > 0:
+            augmented = torchaudio.functional.add_noise(
+                waveform=waveform, noise=noise, snr=torch.tensor([snr])
+            )
+        else:
+            augmented = waveform
         return augmented
 
     def process(self, waveform, sample_rate):
